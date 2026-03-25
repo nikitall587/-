@@ -1,0 +1,5 @@
+{
+  "name": "עוזר משלוחים (Delivery Assistant)",
+  "description": "אפליקציה חכמה לשליחים על אופניים - חילוץ כתובות מצילומי מסך וניווט אופניים פנימי.",
+  "requestFramePermissions": ["geolocation"]
+}
