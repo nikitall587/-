@@ -18,11 +18,19 @@
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 font-sans antialiased;
+  @apply bg-slate-50 text-slate-900 font-sans antialiased transition-colors duration-300;
+}
+
+.dark body {
+  @apply bg-slate-950 text-slate-50;
 }
 
 .glass-card {
-  @apply bg-white/80 backdrop-blur-md border border-slate-200 shadow-sm rounded-3xl;
+  @apply bg-white/80 backdrop-blur-md border border-slate-200 shadow-sm rounded-3xl transition-all duration-300;
+}
+
+.dark .glass-card {
+  @apply bg-slate-900/80 border-slate-800 shadow-2xl;
 }
 
 /* Hide routing machine instructions panel for a cleaner mobile view */
