@@ -57,6 +57,8 @@ interface DeliveryInfo {
   estimatedMinutes?: number;
   distance?: string;
   payment?: string;
+  company?: string;
+  companyAppUrl?: string;
   priorityScore: number; // 1-100
   timestamp: number;
   pickupCoords?: { lat: number, lng: number };
@@ -461,22 +463,15 @@ const GLMap = ({ center, orders, activeDestination, activeOrderId, heading, isAu
       {/* 3D Buildings Layer */}
       <Layer
         id="3d-buildings"
-        source="openmaptiles"
+        source="carto"
         source-layer="building"
         type="fill-extrusion"
         minzoom={15}
         paint={{
-          'fill-extrusion-color': [
-            'interpolate',
-            ['linear'],
-            ['get', 'render_height'],
-            0, '#f2f2f2',
-            50, '#e0e0e0',
-            100, '#bdbdbd'
-          ],
+          'fill-extrusion-color': isDarkMode ? '#1e293b' : '#e2e8f0',
           'fill-extrusion-height': ['get', 'render_height'],
           'fill-extrusion-base': ['get', 'render_min_height'],
-          'fill-extrusion-opacity': is3D ? 0.8 : 0
+          'fill-extrusion-opacity': is3D ? 0.6 : 0
         }}
       />
     </Map>
@@ -662,7 +657,7 @@ export default function App() {
               {
                 parts: [
                   { inlineData: { mimeType: "image/jpeg", data: base64Data } },
-                  { text: `Analyze this Israeli delivery app screenshot (Wolt, 10bis, etc.) and extract all relevant logistics data.
+                  { text: `Analyze this Israeli delivery app screenshot (Wolt, 10bis, Mishloha, etc.) and extract all relevant logistics data.
                     
                     CRITICAL EXTRACTION RULES:
                     1. Language: The screenshot is in Hebrew. Output JSON fields in English, but values in Hebrew.
@@ -676,6 +671,14 @@ export default function App() {
                     4. Businesses: Identify restaurant/shop names (e.g., "ג'ירף", "AM:PM", "סופר-פארם").
                     5. Relative Locations: Keep "ליד" (near), "מול" (opposite), "קומה" (floor), "דירה" (apartment), "כניסה" (entrance) in the address or notes.
                     6. Urgency: Look for "דחוף", "בהקדם", "ASAP", or time windows (e.g., "12:30-13:00").
+                    7. Company Identification (CRITICAL):
+                       - Identify the delivery company based on UI colors and logos:
+                         * Light Blue/Cyan -> "Wolt"
+                         * Orange -> "10bis"
+                         * Yellow -> "Mishloha"
+                         * Green -> "Bolt Food"
+                         * Black/Yellow -> "Gett Delivery"
+                       - If the color is dominant yellow, it is likely "משלוחה" (Mishloha).
                     
                     JSON Structure:
                     - pickup: Street and City (Hebrew)
@@ -691,6 +694,7 @@ export default function App() {
                     - urgencyText: Reason for urgency (Hebrew)
                     - estimatedMinutes: Number
                     - payment: Amount and method (Hebrew)
+                    - company: The delivery company name (e.g., "Wolt", "10bis", "Mishloha", "Bolt Food", "Gett Delivery")
                     - priorityScore: 1-100` }
                 ]
               }
@@ -715,6 +719,7 @@ export default function App() {
                   estimatedMinutes: { type: Type.NUMBER, nullable: true },
                   distance: { type: Type.STRING, nullable: true },
                   payment: { type: Type.STRING, nullable: true },
+                  company: { type: Type.STRING, nullable: true },
                   priorityScore: { type: Type.NUMBER }
                 },
                 required: ["pickup", "dropoff", "urgency", "urgencyText", "priorityScore"]
@@ -744,6 +749,17 @@ export default function App() {
             routeInfo = await getRouteEstimate(pickupCoords, dropoffCoords);
           }
 
+          const getAppUrl = (company?: string) => {
+            if (!company) return undefined;
+            const c = company.toLowerCase();
+            if (c.includes('wolt')) return 'wolt://';
+            if (c.includes('10bis') || c.includes('tenbis')) return 'tenbis://';
+            if (c.includes('mishloha') || c.includes('משלוחה')) return 'mishloha://';
+            if (c.includes('gett')) return 'gett://';
+            if (c.includes('bolt')) return 'boltfood://';
+            return undefined;
+          };
+
           return {
             ...result,
             pickup: pickupRes?.display_name || result.pickup,
@@ -752,6 +768,7 @@ export default function App() {
             dropoffCoords,
             estimatedMinutes: routeInfo?.duration || result.estimatedMinutes,
             distance: routeInfo ? `${routeInfo.distance.toFixed(1)} ק"מ` : result.distance,
+            companyAppUrl: getAppUrl(result.company),
             id: Math.random().toString(36).substr(2, 9),
             timestamp: Date.now(),
             status: 'pending'
@@ -948,9 +965,6 @@ export default function App() {
             </div>
           </div>
           <div className="flex gap-2 items-center">
-            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl">
-              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
             <div className="flex items-center gap-2 text-green-700 dark:text-green-400 px-3 py-1.5 rounded-xl border border-green-100 dark:border-green-900/50 bg-green-50/50 dark:bg-green-900/20">
               <motion.span 
                 key={totalEarnings}
@@ -961,6 +975,9 @@ export default function App() {
                 ₪{totalEarnings.toFixed(2)}
               </motion.span>
             </div>
+            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl">
+              {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
             <button onClick={() => setViewMode(viewMode === 'list' ? 'map' : 'list')} className="p-2.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl">
               {viewMode === 'list' ? <MapIcon size={20} /> : <List size={20} />}
             </button>
@@ -1064,7 +1081,20 @@ export default function App() {
                   {orders.map((order, idx) => (
                     <div key={order.id} className={`p-4 rounded-2xl border bg-white dark:bg-slate-900 dark:border-slate-800 ${order.status === 'delivered' ? 'opacity-50' : ''}`}>
                       <div className="flex justify-between mb-2">
-                        <span className="text-[10px] font-black bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded uppercase">{order.urgencyText}</span>
+                        <div className="flex gap-2">
+                          <span className="text-[10px] font-black bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded uppercase">{order.urgencyText}</span>
+                          {order.company && (
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
+                              order.company.toLowerCase().includes('wolt') ? 'bg-cyan-100 text-cyan-700' :
+                              order.company.toLowerCase().includes('10bis') ? 'bg-orange-100 text-orange-700' :
+                              order.company.toLowerCase().includes('mishloha') ? 'bg-yellow-100 text-yellow-700' :
+                              order.company.toLowerCase().includes('bolt') ? 'bg-green-100 text-green-700' :
+                              'bg-slate-100 text-slate-700'
+                            }`}>
+                              {order.company}
+                            </span>
+                          )}
+                        </div>
                         <button onClick={() => setOrders(prev => prev.filter(o => o.id !== order.id))} className="text-slate-300 dark:text-slate-600"><Trash2 size={14} /></button>
                       </div>
                       {editingOrderId === order.id ? (
@@ -1216,6 +1246,15 @@ export default function App() {
                             </div>
                           )}
                           <div className="flex gap-2">
+                            {order.companyAppUrl && (
+                              <button 
+                                onClick={() => window.open(order.companyAppUrl, '_blank')}
+                                className="flex-1 py-2 bg-amber-500 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1"
+                              >
+                                <ExternalLink size={12} />
+                                אישור באפליקציה
+                              </button>
+                            )}
                             <button 
                               onClick={() => { 
                                 if (order.pickupCoords) {
